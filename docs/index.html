@@ -1,0 +1,314 @@
+<!--
+Online Auction and Bidding Platform
+Single-file HTML (includes CSS + JavaScript)
+Save as auction.html and open in your browser.
+Features:
+- Multiple auction items
+- Countdown timer per item
+- Place bid with validation
+- Bid history per item (stored in localStorage)
+- Live highest-bid update and automatic close when timer ends
+- Simple responsive UI
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Online Auction & Bidding Platform</title>
+  <style>
+    :root{
+      --bg:#f4f7fb; --card:#fff; --accent:#0b74de; --muted:#6b7280; --success:#16a34a; --danger:#dc2626;
+      --glass: rgba(255,255,255,0.6);
+    }
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial; margin:0; background:linear-gradient(180deg,var(--bg),#e9f2ff); color:#0f172a}
+    header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;background:var(--card);box-shadow:0 2px 8px rgba(10,10,10,0.04);position:sticky;top:0;z-index:10}
+    header h1{font-size:1.05rem;margin:0}
+    .container{max-width:1100px;margin:1.25rem auto;padding:0 1rem}
+
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+    @media (max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:600px){.grid{grid-template-columns:1fr}}
+
+    .card{background:var(--card);padding:1rem;border-radius:12px;box-shadow:0 8px 20px rgba(11,84,150,0.06);display:flex;flex-direction:column;min-height:300px}
+    .thumb{height:160px;border-radius:8px;background-size:cover;background-position:center;margin-bottom:0.75rem}
+    .meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem}
+    .title{font-weight:600}
+    .price{font-weight:700;color:var(--accent)}
+    .muted{color:var(--muted);font-size:0.9rem}
+
+    .bid-row{display:flex;gap:0.5rem;margin-top:auto}
+    .bid-row input[type=number]{flex:1;padding:0.55rem;border-radius:8px;border:1px solid #dbeafe}
+    .bid-row button{padding:0.55rem 0.9rem;border-radius:8px;border:0;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
+    .bid-row button[disabled]{opacity:0.6;cursor:not-allowed}
+
+    .small{font-size:0.85rem}
+    .timer{background:#f1f9ff;padding:0.4rem 0.6rem;border-radius:8px;font-weight:600}
+
+    .controls{display:flex;gap:0.5rem;align-items:center}
+    .btn-ghost{background:transparent;border:1px solid #e6eefc;padding:0.45rem 0.6rem;border-radius:8px;cursor:pointer}
+
+    footer{max-width:1100px;margin:1rem auto 3rem;padding:1rem;text-align:center;color:var(--muted)}
+
+    /* Modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.5);display:flex;align-items:center;justify-content:center}
+    .modal{background:var(--card);padding:1rem;border-radius:12px;width:min(720px,95%);box-shadow:0 12px 40px rgba(2,6,23,0.25)}
+    .history-list{max-height:320px;overflow:auto;margin-top:0.5rem}
+    .history-item{display:flex;justify-content:space-between;padding:0.55rem;border-bottom:1px dashed #eef6ff}
+
+    /* little badges */
+    .badge{display:inline-block;padding:0.25rem 0.5rem;border-radius:999px;font-weight:700;font-size:0.85rem}
+    .badge-open{background:#eaf6ff;color:#075985}
+    .badge-closed{background:#fff0f0;color:var(--danger);border:1px solid rgba(220,38,38,0.08)}
+
+    /* empty state */
+    .empty{padding:1rem;border-radius:8px;background:linear-gradient(180deg,#ffffff,#fbfdff);text-align:center;border:1px dashed #e6eefc}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AuctionHouse — Live Bidding Platform</h1>
+    <div class="controls">
+      <div class="muted small">Time: <span id="now"></span></div>
+      <button class="btn-ghost" id="resetStorage">Reset Data</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center">
+      <div style="flex:1">
+        <p class="muted">Browse auctions below. Click "View History" to see all bids for an item. Place bids higher than the current highest bid.</p>
+      </div>
+      <div>
+        <label for="filter">Filter:</label>
+        <select id="filter">
+          <option value="all">All</option>
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+    </section>
+
+    <section id="items" class="grid">
+      <!-- items inserted by JS -->
+    </section>
+
+    <div id="empty" class="empty" style="display:none;margin-top:1rem">No auctions available.</div>
+
+    <!-- Modal: bid history -->
+    <div id="modal" style="display:none" aria-hidden="true">
+      <div class="modal-backdrop" id="backdrop">
+        <div class="modal" role="dialog" aria-modal="true">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <h3 id="modalTitle">Bid History</h3>
+              <div class="muted small" id="modalSub"></div>
+            </div>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <button class="btn-ghost" id="closeModal">Close</button>
+            </div>
+          </div>
+          <div class="history-list" id="historyList"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Built for demo & learning — not production. Data persists in your browser's localStorage.
+  </footer>
+
+  <script>
+    // --- Sample auctions (in real apps this would come from a server) ---
+    const SAMPLE_ITEMS = [
+      {id:'A1',title:'Vintage Wristwatch',desc:'Classic 1960s mechanical watch in working condition.',img:'https://picsum.photos/id/1005/800/600',startPrice:120,endsIn:120},
+      {id:'A2',title:'Electric Guitar',desc:'Strat-style electric guitar, single coil pickups, great tone.',img:'https://picsum.photos/id/1011/800/600',startPrice:250,endsIn:420},
+      {id:'A3',title:'Antique Vase',desc:'Hand-painted ceramic vase from late 19th century.',img:'https://picsum.photos/id/1025/800/600',startPrice:80,endsIn:60},
+      {id:'A4',title:'Gaming Laptop',desc:'High-performance gaming laptop, 16GB RAM, 1TB SSD.',img:'https://picsum.photos/id/180/800/600',startPrice:650,endsIn:900}
+    ];
+
+    // utils
+    const nowEl = document.getElementById('now');
+    function fmtTime(ts){return new Date(ts).toLocaleString()}
+    function tickNow(){nowEl.textContent = new Date().toLocaleString()}
+    setInterval(tickNow,1000); tickNow();
+
+    // localStorage keys
+    const STORAGE_KEY = 'auction_demo_state_v1';
+
+    // load or init
+    function loadState(){
+      const data = localStorage.getItem(STORAGE_KEY);
+      if(!data){
+        // build initial state with auctions and bid arrays
+        const state = {items: SAMPLE_ITEMS.map(it => ({...it, createdAt: Date.now(),endsAt: Date.now() + (it.endsIn*1000)})), bids: {}};
+        state.items.forEach(it => state.bids[it.id] = []);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        return state;
+      }
+      try{return JSON.parse(data)}catch(e){localStorage.removeItem(STORAGE_KEY);return loadState()}
+    }
+
+    function saveState(state){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+
+    let state = loadState();
+
+    // render
+    const itemsContainer = document.getElementById('items');
+    const emptyEl = document.getElementById('empty');
+    const filterEl = document.getElementById('filter');
+
+    function highestBid(itemId){
+      const arr = state.bids[itemId] || [];
+      if(arr.length===0) return null;
+      return arr.reduce((a,b)=> a.amount>=b.amount? a : b);
+    }
+
+    function isClosed(item){return Date.now() >= item.endsAt}
+
+    function render(){
+      itemsContainer.innerHTML='';
+      const filter = filterEl.value;
+      const visible = state.items.filter(it => filter==='all' ? true : (filter==='open' ? !isClosed(it) : isClosed(it)));
+      if(visible.length===0){emptyEl.style.display='block'} else {emptyEl.style.display='none'}
+
+      visible.forEach(item => {
+        const hb = highestBid(item.id);
+        const current = hb ? hb.amount : item.startPrice;
+
+        const card = document.createElement('article'); card.className='card';
+        const img = document.createElement('div'); img.className='thumb'; img.style.backgroundImage = `url(${item.img})`;
+        card.appendChild(img);
+
+        const meta = document.createElement('div'); meta.className='meta';
+        const t = document.createElement('div'); t.innerHTML = `<div class="title">${item.title}</div><div class="muted small">${item.desc}</div>`;
+        const p = document.createElement('div'); p.innerHTML = `<div class="price">₹ ${current}</div><div class="muted small">Starting ₹ ${item.startPrice}</div>`;
+        meta.appendChild(t); meta.appendChild(p); card.appendChild(meta);
+
+        const more = document.createElement('div'); more.className='muted small';
+        const timer = document.createElement('div'); timer.className='timer'; timer.id = 'timer-'+item.id; more.appendChild(timer);
+
+        const badge = document.createElement('div'); badge.style.marginTop='0.5rem'; badge.innerHTML = isClosed(item) ? '<span class="badge badge-closed">Closed</span>' : '<span class="badge badge-open">Open</span>';
+        more.appendChild(badge);
+
+        card.appendChild(more);
+
+        // bid input
+        const bidRow = document.createElement('div'); bidRow.className='bid-row';
+        const input = document.createElement('input'); input.type='number'; input.min='1'; input.placeholder='Enter your bid (₹)'; input.value='';
+        const btn = document.createElement('button'); btn.textContent = 'Place Bid';
+        bidRow.appendChild(input); bidRow.appendChild(btn);
+        card.appendChild(bidRow);
+
+        const aux = document.createElement('div'); aux.style.display='flex'; aux.style.justifyContent='space-between'; aux.style.marginTop='0.75rem';
+        const hbBtn = document.createElement('button'); hbBtn.className='btn-ghost small'; hbBtn.textContent = 'View History';
+        const owner = document.createElement('div'); owner.className='muted small'; owner.textContent = 'Item ID: '+item.id;
+        aux.appendChild(hbBtn); aux.appendChild(owner);
+        card.appendChild(aux);
+
+        // disable if closed
+        if(isClosed(item)){
+          input.disabled = true; btn.disabled = true; timer.textContent = 'Auction ended';
+        } else {
+          // attach event
+          btn.addEventListener('click', ()=> placeBid(item.id, Number(input.value)));
+        }
+
+        hbBtn.addEventListener('click', ()=> openHistory(item.id));
+
+        itemsContainer.appendChild(card);
+        updateTimerUI(item);
+      });
+    }
+
+    // update countdown timers (runs every second)
+    function updateTimerUI(item){
+      const el = document.getElementById('timer-'+item.id);
+      if(!el) return;
+      const remain = Math.max(0, item.endsAt - Date.now());
+      if(remain<=0){
+        el.textContent = '00:00:00';
+        // mark closed
+        render();
+        return;
+      }
+      const s = Math.floor(remain/1000)%60;
+      const m = Math.floor(remain/1000/60)%60;
+      const h = Math.floor(remain/1000/3600);
+      el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    // periodic tick
+    setInterval(()=>{
+      state.items.forEach(updateTimerUI);
+      // check for auctions that just closed -> render to disable inputs
+      let changed=false;
+      state.items.forEach(it=>{ if(!it._closed && isClosed(it)){ it._closed=true; changed=true }});
+      if(changed) saveState(state) || render();
+    },1000);
+
+    // place bid
+    function placeBid(itemId, amount){
+      if(!amount || isNaN(amount) || amount<=0){return alert('Enter a valid bid amount')}
+      const item = state.items.find(i=>i.id===itemId);
+      if(!item) return alert('Item not found');
+      if(isClosed(item)) return alert('Auction closed');
+      const hb = highestBid(itemId);
+      const minAllowed = hb ? hb.amount + 1 : item.startPrice;
+      if(amount < minAllowed) return alert('Your bid must be at least ₹ ' + minAllowed);
+
+      const bid = {amount: amount,ts: Date.now(), bidder: randomName()};
+      state.bids[itemId].push(bid);
+      saveState(state);
+      render();
+    }
+
+    function randomName(){
+      const names = ['Asha','Rahul','Priya','Vikram','Sana','Arjun','Neha','Rohan'];
+      return names[Math.floor(Math.random()*names.length)] + Math.floor(Math.random()*90+10);
+    }
+
+    // modal history
+    const modal = document.getElementById('modal');
+    const backdrop = document.getElementById('backdrop');
+    const closeModalBtn = document.getElementById('closeModal');
+    const historyList = document.getElementById('historyList');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalSub = document.getElementById('modalSub');
+
+    function openHistory(itemId){
+      const item = state.items.find(i=>i.id===itemId);
+      const list = (state.bids[itemId] || []).slice().sort((a,b)=>b.ts-a.ts);
+      modalTitle.textContent = item.title + ' — Bid History';
+      modalSub.textContent = `Current highest: ₹ ${ (highestBid(itemId)?.amount) ?? item.startPrice } | Ends: ${new Date(item.endsAt).toLocaleString()}`;
+      historyList.innerHTML = '';
+      if(list.length===0){ historyList.innerHTML = '<div class="muted">No bids yet</div>' } else {
+        list.forEach(b => {
+          const el = document.createElement('div'); el.className='history-item';
+          el.innerHTML = `<div><strong>${b.bidder}</strong> <div class="muted small">${new Date(b.ts).toLocaleString()}</div></div><div style="font-weight:700">₹ ${b.amount}</div>`;
+          historyList.appendChild(el);
+        })
+      }
+      modal.style.display='block';
+    }
+
+    closeModalBtn.addEventListener('click', ()=> modal.style.display='none');
+    backdrop.addEventListener('click', (e)=>{ if(e.target===backdrop) modal.style.display='none' });
+
+    // reset storage (for demo)
+    document.getElementById('resetStorage').addEventListener('click', ()=>{
+      if(confirm('Reset demo data? This clears bids.')){ localStorage.removeItem(STORAGE_KEY); state = loadState(); render(); }
+    });
+
+    // filter change
+    filterEl.addEventListener('change', render);
+
+    // initial render
+    render();
+
+    // TIP: You can extend this demo by wiring to a real backend via fetch/WebSocket
+  </script>
+</body>
+</html>
