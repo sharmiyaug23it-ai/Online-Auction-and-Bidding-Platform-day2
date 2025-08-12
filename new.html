@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Online Auction & Bidding Platform — Enhanced</title>
+  <style>
+    /* ----------------------
+       Theme & variables
+       ---------------------- */
+    :root{
+      --bg:#f4f7fb; --card:#ffffff; --accent:#0b74de; --accent-600:#075985; --muted:#6b7280; --success:#16a34a; --danger:#dc2626;
+      --glass: rgba(255,255,255,0.6);
+      --radius:12px; --shadow: 0 8px 20px rgba(11,84,150,0.06);
+      --max-width:1100px; --ui-gap:1rem; --font: Inter, system-ui, 'Segoe UI', Roboto, Arial;
+    }
+
+    /* ----------------------
+       Reset & base
+       ---------------------- */
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{font-family:var(--font);margin:0;background:linear-gradient(180deg,var(--bg),#e9f2ff);color:#0f172a;-webkit-font-smoothing:antialiased}
+
+    header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;background:var(--card);box-shadow:0 2px 8px rgba(10,10,10,0.04);position:sticky;top:0;z-index:50}
+    header h1{font-size:1.05rem;margin:0;display:flex;align-items:center;gap:0.6rem}
+
+    .container{max-width:var(--max-width);margin:1.25rem auto;padding:0 1rem}
+
+    /* ----------------------
+       Grid & cards
+       ---------------------- */
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--ui-gap)}
+    @media (max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:600px){.grid{grid-template-columns:1fr}}
+
+    .card{background:var(--card);padding:1rem;border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:320px;position:relative;overflow:hidden;transition:transform 300ms ease,box-shadow 300ms ease}
+    .card::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,116,222,0.02),transparent);pointer-events:none;transform:translateY(20%);opacity:0;transition:opacity 300ms ease}
+    .card:hover{transform:translateY(-6px);box-shadow:0 20px 40px rgba(11,84,150,0.12)}
+    .card:hover::before{opacity:1}
+
+    .thumb{height:160px;border-radius:8px;background-size:cover;background-position:center;margin-bottom:0.75rem;transition:transform 600ms cubic-bezier(.2,.9,.2,1)}
+    .card:hover .thumb{transform:scale(1.03)}
+
+    .meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem}
+    .title{font-weight:700}
+    .price{font-weight:800;color:var(--accent)}
+    .muted{color:var(--muted);font-size:0.9rem}
+
+    .bid-row{display:flex;gap:0.5rem;margin-top:auto}
+    .bid-row input[type=number]{flex:1;padding:0.55rem;border-radius:8px;border:1px solid #dbeafe;outline:none;transition:box-shadow 180ms,transform 180ms}
+    .bid-row input[type=number]:focus{box-shadow:0 6px 20px rgba(11,116,222,0.12);transform:translateY(-2px)}
+    .bid-row button{padding:0.55rem 0.9rem;border-radius:8px;border:0;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;transition:transform 160ms ease,box-shadow 160ms}
+    .bid-row button:hover:not([disabled]){transform:translateY(-3px);box-shadow:0 8px 20px rgba(11,116,222,0.12)}
+    .bid-row button[disabled]{opacity:0.6;cursor:not-allowed}
+
+    .small{font-size:0.85rem}
+    .timer{background:#f1f9ff;padding:0.4rem 0.6rem;border-radius:8px;font-weight:700;display:inline-block}
+
+    .controls{display:flex;gap:0.5rem;align-items:center}
+    .btn-ghost{background:transparent;border:1px solid #e6eefc;padding:0.45rem 0.6rem;border-radius:8px;cursor:pointer}
+
+    footer{max-width:var(--max-width);margin:1rem auto 3rem;padding:1rem;text-align:center;color:var(--muted)}
+
+    /* ----------------------
+       Modal & history
+       ---------------------- */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.45);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 240ms ease}
+    .modal{background:var(--card);padding:1rem;border-radius:12px;width:min(720px,95%);box-shadow:0 12px 40px rgba(2,6,23,0.25);transform:translateY(10px);transition:transform 240ms,opacity 240ms}
+    .history-list{max-height:320px;overflow:auto;margin-top:0.5rem}
+    .history-item{display:flex;justify-content:space-between;padding:0.55rem;border-bottom:1px dashed #eef6ff}
+
+    /* modal visible state (toggled by .show class on backdrop) */
+    .modal-backdrop.show{opacity:1;pointer-events:auto}
+    .modal-backdrop.show .modal{transform:translateY(0)}
+
+    /* ----------------------
+       badges, empty and small UI
+       ---------------------- */
+    .badge{display:inline-block;padding:0.25rem 0.5rem;border-radius:999px;font-weight:700;font-size:0.85rem}
+    .badge-open{background:#eaf6ff;color:var(--accent-600);position:relative;overflow:visible}
+    .badge-open::after{content:"";position:absolute;right:-8px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px rgba(11,116,222,0.45);animation: pulse 1500ms infinite}
+    .badge-closed{background:#fff0f0;color:var(--danger);border:1px solid rgba(220,38,38,0.08)}
+
+    @keyframes pulse{0%{transform:scale(0.9);opacity:0.9}50%{transform:scale(1.15);opacity:0.6}100%{transform:scale(0.9);opacity:0.9}}
+
+    .empty{padding:1rem;border-radius:8px;background:linear-gradient(180deg,#ffffff,#fbfdff);text-align:center;border:1px dashed #e6eefc}
+
+    /* ----------------------
+       animated CTA button example
+       ---------------------- */
+    .fancy-btn{display:inline-block;padding:0.6rem 1rem;border-radius:12px;background:linear-gradient(90deg,var(--accent),#0a58a8);color:#fff;font-weight:800;border:none;cursor:pointer;position:relative;overflow:hidden;transition:transform 160ms}
+    .fancy-btn::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,rgba(255,255,255,0.06),transparent);transform:translateX(-120%);transition:transform 520ms cubic-bezier(.2,.9,.2,1);pointer-events:none}
+    .fancy-btn:hover::before{transform:translateX(0)}
+
+    /* subtle decorative footer */
+    footer::before{content:"";display:block;height:6px;width:100%;background:linear-gradient(90deg,rgba(11,116,222,0.12),transparent);margin-bottom:0.6rem;border-radius:6px}
+
+    /* accessibility helper */
+    .sr-only{position:absolute!important;height:1px;width:1px;overflow:hidden;clip:rect(1px,1px,1px,1px);white-space:nowrap}
+
+    /* responsive tweaks */
+    @media (max-width:420px){header{padding:0.6rem} .bid-row{flex-direction:column} .bid-row button{width:100%}}
+  </style>
+</head>
+<body>
+  <header>
+    <h1 aria-hidden="true">🏷️ AuctionHouse — Live Bidding</h1>
+    <div class="controls" role="region" aria-label="controls">
+      <div class="muted small">Time: <span id="now">—</span></div>
+      <button class="btn-ghost" id="resetStorage">Reset Data</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center">
+      <div style="flex:1">
+        <p class="muted">Browse auctions below. Click "View History" to see all bids for an item. Place bids higher than the current highest bid.</p>
+      </div>
+      <div>
+        <label for="filter">Filter:</label>
+        <select id="filter">
+          <option value="all">All</option>
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+    </section>
+
+    <section id="items" class="grid" aria-live="polite">
+      <!-- items inserted by JS -->
+    </section>
+
+    <div id="empty" class="empty" style="display:none;margin-top:1rem">No auctions available.</div>
+
+    <!-- Modal: bid history -->
+    <div id="modal" style="display:block;" aria-hidden="true">
+      <div class="modal-backdrop" id="backdrop" tabindex="-1" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <h3 id="modalTitle">Bid History</h3>
+              <div class="muted small" id="modalSub"></div>
+            </div>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <button class="btn-ghost" id="closeModal">Close</button>
+            </div>
+          </div>
+          <div class="history-list" id="historyList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toaster notifications -->
+    <div id="toaster" aria-live="assertive" style="position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:60"></div>
+
+  </main>
+
+  <footer>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+      <div style="color:var(--muted)">Built for demo & learning — not production. Data persists in your browser's localStorage.</div>
+      <div><button class="fancy-btn" id="demoBidAll">Demo: Random bid on all open items</button></div>
+    </div>
+  </footer>
+
+  <script>
+    /* =========================
+       Data & sample items
+       ========================= */
+    const SAMPLE_ITEMS = [
+      {id:'A1',title:'Vintage Wristwatch',desc:'Classic 1960s mechanical watch in working condition.',img:'https://picsum.photos/id/1005/800/600',startPrice:120,endsIn:120},
+      {id:'A2',title:'Electric Guitar',desc:'Strat-style electric guitar, single coil pickups, great tone.',img:'images.jpeg',startPrice:250,endsIn:420},
+      {id:'A3',title:'Antique Vase',desc:'Hand-painted ceramic vase from late 19th century.',img:'download.jpeg',startPrice:80,endsIn:60},
+      {id:'A4',title:'Gaming Laptop',desc:'High-performance gaming laptop, 16GB RAM, 1TB SSD.',img:'https://picsum.photos/id/180/800/600',startPrice:650,endsIn:900}
+    ];
+
+    // keys & state
+    const STORAGE_KEY = 'auction_demo_state_v2';
+    let state = null; // loaded below
+
+    // ------------------
+    // Utilities (reusable functions)
+    // ------------------
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+    const fmtTime = ts => new Date(ts).toLocaleString();
+    const nowEl = $('#now');
+    function tickNow(){ nowEl.textContent = new Date().toLocaleString(); }
+    setInterval(tickNow,1000); tickNow();
+
+    const clamp = (v,min,max) => Math.max(min, Math.min(max, v));
+
+    function loadState(){
+      const data = localStorage.getItem(STORAGE_KEY);
+      if(!data){
+        const state = {items: SAMPLE_ITEMS.map(it => ({...it, createdAt: Date.now(), endsAt: Date.now() + (it.endsIn*1000)})), bids: {}};
+        state.items.forEach(it => state.bids[it.id] = []);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        return state;
+      }
+      try{ return JSON.parse(data) }catch(e){ localStorage.removeItem(STORAGE_KEY); return loadState(); }
+    }
+    function saveState(s){ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+
+    // simple toaster for non-blocking feedback
+    function toast(msg, opts={timeout:3000, type:'info'}){
+      const container = document.getElementById('toaster');
+      const el = document.createElement('div');
+      el.setAttribute('role','status');
+      el.style.padding='0.6rem 0.9rem';
+      el.style.borderRadius='10px';
+      el.style.boxShadow='0 8px 20px rgba(2,6,23,0.08)';
+      el.style.background = opts.type==='error'? '#fff0f0' : opts.type==='success'? '#ecfdf5' : '#f8fbff';
+      el.style.color = opts.type==='error'? 'var(--danger)' : opts.type==='success'? 'var(--success)' : 'var(--accent-600)';
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateX(20px)'; setTimeout(()=>el.remove(),300) }, opts.timeout);
+    }
+
+    // generate random bidder names
+    function randomName(){ const names = ['Asha','Rahul','Priya','Vikram','Sana','Arjun','Neha','Rohan','Maya','Dev']; return names[Math.floor(Math.random()*names.length)] + Math.floor(Math.random()*90+10); }
+
+    // get highest bid quickly (reduce)
+    function highestBid(itemId){ const arr = state.bids[itemId] || []; if(arr.length===0) return null; return arr.reduce((a,b)=> a.amount>=b.amount? a : b); }
+    function isClosed(item){ return Date.now() >= item.endsAt }
+
+    // ------------------
+    // Rendering
+    // ------------------
+    const itemsContainer = $('#items');
+    const emptyEl = $('#empty');
+    const filterEl = $('#filter');
+
+    function render(){
+      itemsContainer.innerHTML='';
+      const filter = filterEl.value;
+      const visible = state.items.filter(it => filter==='all' ? true : (filter==='open' ? !isClosed(it) : isClosed(it)));
+      emptyEl.style.display = visible.length===0 ? 'block' : 'none';
+
+      visible.forEach(item => {
+        const hb = highestBid(item.id);
+        const current = hb ? hb.amount : item.startPrice;
+
+        const card = document.createElement('article'); card.className='card';
+        const img = document.createElement('div'); img.className='thumb'; img.style.backgroundImage = `url(${item.img})`; img.setAttribute('aria-hidden','true');
+        card.appendChild(img);
+
+        const meta = document.createElement('div'); meta.className='meta';
+        const t = document.createElement('div'); t.innerHTML = `<div class="title">${escapeHtml(item.title)}</div><div class="muted small">${escapeHtml(item.desc)}</div>`;
+        const p = document.createElement('div'); p.innerHTML = `<div class="price">₹ ${current}</div><div class="muted small">Starting ₹ ${item.startPrice}</div>`;
+        meta.appendChild(t); meta.appendChild(p); card.appendChild(meta);
+
+        const more = document.createElement('div'); more.className='muted small';
+        const timer = document.createElement('div'); timer.className='timer'; timer.id = 'timer-'+item.id; more.appendChild(timer);
+
+        const badge = document.createElement('div'); badge.style.marginTop='0.5rem'; badge.innerHTML = isClosed(item) ? '<span class="badge badge-closed">Closed</span>' : '<span class="badge badge-open">Open</span>';
+        more.appendChild(badge);
+
+        card.appendChild(more);
+
+        // bid input
+        const bidRow = document.createElement('div'); bidRow.className='bid-row';
+        const input = document.createElement('input'); input.type='number'; input.min='1'; input.placeholder='Enter your bid (₹)'; input.value='';
+        const btn = document.createElement('button'); btn.textContent = 'Place Bid'; btn.setAttribute('aria-label','Place Bid');
+        bidRow.appendChild(input); bidRow.appendChild(btn);
+        card.appendChild(bidRow);
+
+        const aux = document.createElement('div'); aux.style.display='flex'; aux.style.justifyContent='space-between'; aux.style.marginTop='0.75rem';
+        const hbBtn = document.createElement('button'); hbBtn.className='btn-ghost small'; hbBtn.textContent = 'View History';
+        const owner = document.createElement('div'); owner.className='muted small'; owner.textContent = 'Item ID: '+item.id;
+        aux.appendChild(hbBtn); aux.appendChild(owner);
+        card.appendChild(aux);
+
+        // disable if closed
+        if(isClosed(item)){
+          input.disabled = true; btn.disabled = true; timer.textContent = 'Auction ended';
+        } else {
+          // attach event with debounce to avoid accidental double clicks
+          btn.addEventListener('click', ()=> placeBid(item.id, Number(input.value)).catch(e=>toast(e.message,{type:'error'})));
+          input.addEventListener('keydown', (ev)=>{ if(ev.key==='Enter') btn.click(); });
+        }
+
+        hbBtn.addEventListener('click', ()=> openHistory(item.id));
+
+        itemsContainer.appendChild(card);
+        updateTimerUI(item);
+      });
+    }
+
+    // update countdown timers (runs each animation frame for smoother UX)
+    function updateTimerUI(item){
+      const el = document.getElementById('timer-'+item.id);
+      if(!el) return;
+      const remain = Math.max(0, item.endsAt - Date.now());
+      if(remain<=0){ el.textContent = '00:00:00'; render(); return; }
+      const s = Math.floor(remain/1000)%60;
+      const m = Math.floor(remain/1000/60)%60;
+      const h = Math.floor(remain/1000/3600);
+      el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    // Use a single RAF loop to update timers efficiently
+    let rafRunning = false;
+    function rafTick(){
+      state.items.forEach(updateTimerUI);
+      // detect newly closed auctions
+      let changed=false;
+      state.items.forEach(it=>{ if(!it._closed && isClosed(it)){ it._closed = true; changed=true; }});
+      if(changed) saveState(state) || render();
+      requestAnimationFrame(rafTick);
+    }
+
+    // start RAF
+    requestAnimationFrame(rafTick);
+
+    /* =========================
+       Bidding logic (async-style to allow future server integration)
+       ========================= */
+    async function placeBid(itemId, amount){
+      // basic validation
+      if(!amount || isNaN(amount) || amount<=0) throw new Error('Enter a valid bid amount');
+      const item = state.items.find(i=>i.id===itemId);
+      if(!item) throw new Error('Item not found');
+      if(isClosed(item)) throw new Error('Auction closed');
+      const hb = highestBid(itemId);
+      const minAllowed = hb ? (hb.amount + 1) : item.startPrice;
+      if(amount < minAllowed) throw new Error('Your bid must be at least ₹ ' + minAllowed);
+
+      // optimistic UI update
+      const bid = {amount: amount, ts: Date.now(), bidder: randomName()};
+      state.bids[itemId].push(bid);
+      saveState(state);
+      render();
+      toast('Bid placed: ₹ ' + amount, {type:'success'});
+
+      // simulate server latency for demo (no-op)
+      await new Promise(r=>setTimeout(r,300));
+    }
+
+    /* =========================
+       Modal & history
+       ========================= */
+    const modal = $('#modal');
+    const backdrop = $('#backdrop');
+    const closeModalBtn = $('#closeModal');
+    const historyList = $('#historyList');
+    const modalTitle = $('#modalTitle');
+    const modalSub = $('#modalSub');
+
+    function openHistory(itemId){
+      const item = state.items.find(i=>i.id===itemId);
+      const list = (state.bids[itemId] || []).slice().sort((a,b)=>b.ts-a.ts);
+      modalTitle.textContent = item.title + ' — Bid History';
+      modalSub.textContent = `Current highest: ₹ ${ (highestBid(itemId)?.amount) ?? item.startPrice }  | Ends: ${fmtTime(item.endsAt)}`;
+      historyList.innerHTML='';
+      if(list.length===0){ historyList.innerHTML = '<div class="muted">No bids yet</div>' } else {
+        list.forEach(b => {
+          const el = document.createElement('div'); el.className='history-item';
+          el.innerHTML = `<div><strong>${escapeHtml(b.bidder)}</strong> <div class="muted small">${fmtTime(b.ts)}</div></div><div style="font-weight:700">₹ ${b.amount}</div>`;
+          historyList.appendChild(el);
+        })
+      }
+      backdrop.classList.add('show');
+      backdrop.setAttribute('aria-hidden','false');
+    }
+
+    closeModalBtn.addEventListener('click', ()=>{ backdrop.classList.remove('show'); backdrop.setAttribute('aria-hidden','true'); });
+    backdrop.addEventListener('click', (e)=>{ if(e.target===backdrop) { backdrop.classList.remove('show'); backdrop.setAttribute('aria-hidden','true'); } });
+
+    // reset storage (for demo)
+    $('#resetStorage').addEventListener('click', ()=>{
+      if(confirm('Reset demo data? This clears bids.')){ localStorage.removeItem(STORAGE_KEY); state = loadState(); render(); toast('Demo data reset'); }
+    });
+
+    // filter change
+    filterEl.addEventListener('change', render);
+
+    // demo: place random bid on all open items
+    $('#demoBidAll').addEventListener('click', ()=>{
+      state.items.forEach(it=>{ if(!isClosed(it)){ const hb = highestBid(it.id); const min = hb? hb.amount+1 : it.startPrice; const bidAmt = min + Math.floor(Math.random()*300); state.bids[it.id].push({amount:bidAmt, ts:Date.now(), bidder: randomName()}); }});
+      saveState(state); render(); toast('Random bids placed on open items');
+    });
+
+    // small HTML-escaping helper
+    function escapeHtml(s){ return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+    // initial load
+    state = loadState();
+    render();
+
+    // TIP: This structure keeps UI & data separate and is ready to swap the storage layer
+    // with fetch/WebSocket for a real-time multi-user auction server.
+  </script>
+</body>
+</html>
